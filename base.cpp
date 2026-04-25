@@ -3,8 +3,8 @@
 #include <string>
 #include <SFML/OpenGL.hpp>
 #include <SFML/Window.hpp>
-#include "imgui.h"
-#include "imgui-SFML.h"
+#include <imgui.h>
+#include <imgui-SFML.h>
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -16,6 +16,54 @@
 #include <memory>
 #include <filesystem>
 const double PI = 3.14159265358979323846;
+
+class Logger{
+    public:
+        inline static int depth=0;
+        inline static int off_depth=20;
+        template<typename... Args>
+        static void begin(Args... args){
+            if (Logger::off_depth>Logger::depth){
+                for (int i=0;i<Logger::depth;i++){
+                    std::cout<<" - ";
+                }
+                (std::cout << ... << args)<<std::endl;
+            }
+            Logger::depth++;
+        }
+        static void off(){
+            Logger::off_depth=Logger::depth;
+        }
+        template<typename... Args>
+        static void log(Args... args){
+            if (Logger::off_depth>Logger::depth){
+                Logger::flog(args...);
+            }
+        }
+        template<typename... Args>
+        static void flog(Args... args){
+            for (int i=0;i<Logger::depth;i++){
+                std::cout<<" - ";
+            }
+            (std::cout << ... << args)<<std::endl;
+        }
+        template<typename... Args>
+        static void end(Args... args){
+            if (Logger::depth>0){
+                Logger::depth--;
+            }
+            if (Logger::off_depth>Logger::depth){
+                Logger::off_depth=20;
+                for (int i=0;i<Logger::depth;i++){
+                    std::cout<<" - ";
+                }
+                (std::cout << ... << args)<<std::endl;
+            }
+            if (Logger::off_depth==Logger::depth){
+                Logger::off_depth=20;
+            }
+        }
+};
 
 
 bool fileExists(const std::string& name) {
@@ -47,14 +95,21 @@ struct Vec3 {
     Vec3 operator+(const Vec3& other) {return { x + other.x, y + other.y, z + other.z };}
     Vec3 operator-(const Vec3& other) {return { x - other.x, y - other.y, z - other.z };}
     Vec3 operator*(float scalar) {return {x*scalar, y*scalar, z*scalar};}
+    Vec3 operator/(float scalar) {return {x/scalar, y/scalar, z/scalar};}
     float length(){return std::sqrt(x*x+y*y+z*z);}
     static Vec3 crossProduct(const Vec3& a, const Vec3& b) {
-    return {
-        a.y * b.z - a.z * b.y,  // x = ay*bz - az*by
-        a.z * b.x - a.x * b.z,  // y = az*bx - ax*bz
-        a.x * b.y - a.y * b.z   // z = ax*by - ay*bx
-    };
-}
+        return {
+            a.y * b.z - a.z * b.y,  // x = ay*bz - az*by
+            a.z * b.x - a.x * b.z,  // y = az*bx - ax*bz
+            a.x * b.y - a.y * b.x   // z = ax*by - ay*bx
+        };
+    }
+    static float dotProduct(const Vec3& a, const Vec3& b) {
+        return {
+            a.x * b.x + a.y * b.y + a.z * b.z
+        };
+    }
+
 };
 
 struct Vec4 {
@@ -83,6 +138,76 @@ struct HistoryElement {
     float m;
 };
 
+struct StaticSphericalData {
+    float m;
+    float q;
+    float r;
+    int moving_mode;
+
+    Vec4 color;
+    Vec4 param1;
+    Vec4 param2;
+    Vec4 param3;
+};
+
+struct Matrix {
+    public:
+        float elements[16];
+
+    static Matrix getViewMatrix(Vec3 cameraPos, Vec3 target, Vec3 up){
+        Matrix view;
+        Vec3 forward = (target - cameraPos)/(target-cameraPos).length();
+        Vec3 right = Vec3::crossProduct(forward,up);
+        right = right/right.length();
+        Vec3 newUp = Vec3::crossProduct(right,forward);
+        view.elements[0]=right.x;    view.elements[4]=right.y; view.elements[8]=right.z; view.elements[12]=-Vec3::dotProduct(right,cameraPos);
+        view.elements[1]=newUp.x;    view.elements[5]=newUp.y; view.elements[9]=newUp.z; view.elements[13]=-Vec3::dotProduct(newUp,cameraPos);
+        view.elements[2]=-forward.x;    view.elements[6]=-forward.y; view.elements[10]=-forward.z; view.elements[14]=Vec3::dotProduct(forward,cameraPos);
+        view.elements[3]=0;   view.elements[7]=0; view.elements[11]=0; view.elements[15]=1;
+        return view;
+    }
+
+    static Vec4 getCameraPos(Vec3 target, float distance, float angle_of_vertical, float angle_of_horizontal){
+        Vec3 cameraDisplacement = {
+            distance*std::cos(angle_of_vertical)*std::sin(angle_of_horizontal),
+            distance*std::sin(angle_of_vertical),
+            - distance*std::cos(angle_of_vertical)*std::cos(angle_of_horizontal)
+        };
+        Vec3 cameraPos = target + cameraDisplacement;
+        return Vec4{cameraPos.x,cameraPos.y,cameraPos.z,1.};
+    }
+
+
+    static Matrix getViewMatrix(Vec3 target, float distance, float angle_of_vertical, float angle_of_horizontal){
+        Vec3 cameraDisplacement = {
+            distance*std::cos(angle_of_vertical)*std::sin(angle_of_horizontal),
+            distance*std::sin(angle_of_vertical),
+            - distance*std::cos(angle_of_vertical)*std::cos(angle_of_horizontal)
+        };
+        Vec3 cameraPos = target + cameraDisplacement;
+        Vec3 up = {
+            std::cos(angle_of_vertical+M_PI/2)*std::sin(angle_of_horizontal),
+            std::sin(angle_of_vertical+M_PI/2),
+            - std::cos(angle_of_vertical+M_PI/2)*std::cos(angle_of_horizontal)
+        };
+        return getViewMatrix(cameraPos, target, up);
+
+    }
+
+    static Matrix getProjectionMatrix(float field_of_view, float aspect_ratio, float near, float far){
+        Matrix projection;
+        float S = 1/std::tan(field_of_view/2.0f);
+        
+        projection.elements[0]=S/aspect_ratio;    projection.elements[4]=0; projection.elements[8]=0; projection.elements[12]=0;
+        projection.elements[1]=0;    projection.elements[5]=S; projection.elements[9]=0; projection.elements[13]=0;
+        projection.elements[2]=0;    projection.elements[6]=0; projection.elements[10]=(far+near)/(near-far); projection.elements[14]=(2*far*near)/(near-far);
+        projection.elements[3]=0;   projection.elements[7]=0; projection.elements[11]=-1; projection.elements[15]=0;
+        return projection;
+    }
+
+};
+
+
 struct Uniforms {
     int buffer_offset;
     int history_element_size;
@@ -94,10 +219,10 @@ struct Uniforms {
     float arrow_size;
     float arrow_transparency_factor=1.;
 
-    float amplifying_factor = 1.;
-    float display_ratio;
-    float angle_of_rotation=1.5;
-    float angle_of_rotation_2=.11;
+    Matrix view;
+    Matrix projection;
+
+    Vec4 cameraPos;
 
     u_int display_mode=0;
     u_int grid_size_x;
@@ -112,7 +237,9 @@ struct Uniforms {
     float time;
     float time_per_frame;
 };
+
 struct StageDefiner;
+
 struct State {
     bool show_E = false;
     bool show_B = false;
@@ -135,7 +262,7 @@ struct State {
     bool paused = true;
     float time = 0.;
     float time_per_frame = 1.;
-    float log_time_per_frame = 0.;
+    //float log_time_per_frame = 0.;
   
     
     float c = 0.01;
@@ -154,7 +281,7 @@ struct State {
 
     int display_x=1920;
     int display_y=1080;
-    float display_ratio = 9./16.;
+    float display_ratio = 16./9.;
     int transparency_rendering_style = 1;
 
     int amount_of_charges=0;
@@ -165,53 +292,6 @@ struct State {
     bool show_context_menu = false;
 };
 
-
-
-using MovementPattern = std::function<HistoryElement(float time)>;
-
-class Logger{
-    public:
-        inline static int depth=0;
-        inline static int off_depth=20;
-        template<typename... Args>
-        static void begin(Args... args){
-            if (Logger::off_depth>Logger::depth){
-                for (int i=0;i<Logger::depth;i++){
-                    std::cout<<" - ";
-                }
-                (std::cout << ... << args)<<std::endl;
-            }
-            Logger::depth++;
-        }
-        static void off(){
-            Logger::off_depth=Logger::depth;
-        }
-        template<typename... Args>
-        static void log(Args... args){
-            if (Logger::off_depth>Logger::depth){
-                for (int i=0;i<Logger::depth;i++){
-                    std::cout<<" - ";
-                }
-                (std::cout << ... << args)<<std::endl;
-            }
-        }
-        template<typename... Args>
-        static void end(Args... args){
-            if (Logger::depth>0){
-                Logger::depth--;
-            }
-            if (Logger::off_depth>Logger::depth){
-                Logger::off_depth=20;
-                for (int i=0;i<Logger::depth;i++){
-                    std::cout<<" - ";
-                }
-                (std::cout << ... << args)<<std::endl;
-            }
-            if (Logger::off_depth==Logger::depth){
-                Logger::off_depth=20;
-            }
-        }
-};
 
 class ProgramHandler {
     private:
@@ -335,6 +415,13 @@ class SSBOHandler{
         void update(float data[], size_t data_size, int start){
             glBindBuffer(GL_SHADER_STORAGE_BUFFER, ID);
             glBufferSubData(GL_SHADER_STORAGE_BUFFER, start, data_size, data);
+        }
+        void read(float data[], size_t data_size, int start){
+            glBindBuffer(GL_SHADER_STORAGE_BUFFER, ID);
+            glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, start, data_size, data);
+        }
+        void bind(){
+            glBindBuffer(GL_SHADER_STORAGE_BUFFER, ID);
         }
 };
 
@@ -490,33 +577,24 @@ class MyCharge{
         float r;
         float q;
         float m;
-        MovementPattern pattern;
-        MyCharge(Vec3 pos_, float r_, float q_, float m_, Vec3 color_)
-            :r(r_),
-            q(q_),
-            m(m_),
-            pos(pos_),
-            color(color_)
-        {
+        int pattern;
+        Vec4 param1;
+        Vec4 param2;
+        Vec4 param3;
 
-        }
-        MyCharge(Vec3 pos_, float r_, float q_, float m_, Vec3 color_, MovementPattern pattern)
+        MyCharge(Vec3 pos_, Vec3 vel_, float r_, float q_, float m_, Vec3 color_, int pattern=0, Vec4 param1 = {0.,0.,0.,0.}, Vec4 param2 = {0.,0.,0.,0.}, Vec4 param3 = {0.,0.,0.,0.})
             :r(r_),
             q(q_),
             m(m_),
             pos(pos_),
+            vel(vel_),
             color(color_),
-            pattern(pattern)
+            pattern(pattern),
+            param1(param1),
+            param2(param2),
+            param3(param3)
         {
 
-        }
-        void update(float time){
-            if (pattern){
-                HistoryElement new_state = pattern(time);
-                pos=new_state.pos;
-                vel=new_state.vel;
-                acc=new_state.acc;
-            }
         }
         ~MyCharge(){
 
@@ -551,22 +629,6 @@ class MyCharges{
             return sphere;
         };
         
-        static std::vector<Vec4> getSphereColors(std::vector<MyCharge> charges_){
-            std::vector<Vec4> colors;
-            for (int i=0; i<charges_.size();i++){
-                colors.push_back({charges_[i].color.x,charges_[i].color.y,charges_[i].color.z,charges_[i].r});
-            }
-            return colors;
-        }
-
-        static std::vector<Vec3> getSpherePositions(std::vector<MyCharge> charges_){
-            std::vector<Vec3> positions;
-            for (int i=0; i<charges_.size();i++){
-                positions.push_back(charges_[i].pos);
-            }
-            return positions;
-        }
-
 
         std::vector<HistoryElement> getSphereHistoryElements(float t){
             std::vector<HistoryElement> elements;
@@ -590,17 +652,36 @@ class MyCharges{
             std::vector<HistoryElement> elements;
             history.reserve(history_length*charges.size());
             for (int i=-history_length; i<0; i++){
-                update_static_charges(i+t);
                 elements = getSphereHistoryElements(i+t);
                 history.insert(history.end(),elements.begin(),elements.end());
             }
             return history;
         }
 
-        VBOHandler vbo_sphere_color;
-        VBOHandler vbo_sphere_position;
+        std::vector<StaticSphericalData> getSphereStaticInit(){
+            std::vector<StaticSphericalData> data;
+            data.reserve(charges.size());
+            for (int i=0; i<charges.size(); i++){
+                data.push_back({
+                    charges[i].m,
+                    charges[i].q,
+                    charges[i].r,
+                    charges[i].pattern,
+                    Vec4{charges[i].color.x,charges[i].color.y,charges[i].color.z,1.},
+                    charges[i].param1,
+                    charges[i].param2,
+                    charges[i].param3
+                });
+            }
+            return data;
+        }
+
+
         VBOHandler vbo_sphere_vertices;
-        SSBOHandler ssbo;
+        SSBOHandler ssbo_history;
+        SSBOHandler ssbo_present;
+        SSBOHandler ssbo_static;
+        SSBOHandler ssbo_debugger;
         VAOHandler vao;
         ProgramHandler program;
         int vertices_amount;
@@ -620,96 +701,52 @@ class MyCharges{
             charges=charges_;
             
             std::vector<Vec3> sphereVertices = MyCharges::getSphereVertices(points_amount_);
-            std::vector<Vec4> sphereColors = MyCharges::getSphereColors(charges_);
-            std::vector<Vec3> spherePositions = MyCharges::getSpherePositions(charges_);
-            vbo_sphere_position.init((float*) spherePositions.data(), spherePositions.size()*3*sizeof(float), GL_DYNAMIC_DRAW);
             vbo_sphere_vertices.init((float*) sphereVertices.data(), sphereVertices.size()*3*sizeof(float),GL_STATIC_DRAW);
-            vbo_sphere_color.init((float*) sphereColors.data(), sphereColors.size()*4*sizeof(float), GL_STATIC_DRAW);
+
             program.init(path_,{1,0,1},true);
             vertices_amount=sphereVertices.size();
             charges_amount=charges.size();
             history_length=history_length_;
 
-
             vbo_sphere_vertices.configure(0,3,0,0,0);
-            vbo_sphere_position.configure(1,3,0,0,1);
-            vbo_sphere_color.configure(2,4,0,0,1);
             
             vao.bind();
             vbo_sphere_vertices.bind_configuration();
-            vbo_sphere_position.bind_configuration();
-            vbo_sphere_color.bind_configuration();
+
             VAOHandler::unbind();
 
             std::vector<HistoryElement> history = getSphereHistoryInit(0,history_length);
-            ssbo.init((float*) history.data(),history.size()*sizeof(HistoryElement),0, GL_DYNAMIC_DRAW);
+            ssbo_history.init((float*) history.data(),history.size()*sizeof(HistoryElement), 0, GL_STATIC_DRAW);
+            std::vector<StaticSphericalData> static_data = getSphereStaticInit();
+            ssbo_static.init((float*) static_data.data(),static_data.size()*sizeof(StaticSphericalData), 2, GL_STATIC_DRAW);
+            
+            std::vector<HistoryElement> present = getSphereHistoryElements(0.);
+            ssbo_present.init((float*) present.data(),present.size()*sizeof(HistoryElement), 3, GL_STATIC_DRAW);
 
+            ssbo_debugger.init(NULL, 1000*sizeof(float), 4, GL_DYNAMIC_READ);
         }
 
         ~MyCharges(){                
             
         }
 
-        void update_static_charges(float offset){
-            for (int i=0; i<charges.size();i++){
-                charges[i].update(offset);
-            }
-        }
-
-
-        void update(int last_buffer_offset, int buffer_offset, float time){
-            std::vector<HistoryElement> new_elements;
-            std::vector<HistoryElement> temp_new_elements;
-            Logger::log("buffer offset ", buffer_offset);
-            Logger::log("last_buffer_offset ", last_buffer_offset);
-            for (int offset = last_buffer_offset+1; offset<=buffer_offset; offset++){
-                update_static_charges((float) offset);
-                temp_new_elements = MyCharges::getSphereHistoryElements((float) offset);
-                new_elements.insert(new_elements.end(),temp_new_elements.begin(),temp_new_elements.end());
-            }
-            if (last_buffer_offset == buffer_offset){
-
-                //std::cout<<"skipping updating buffer"<<std::endl;
-                // в теорії тут можна оновити остайній елемент історії але я не бачу з цього багато сенсу
-            } else {
-                if (((last_buffer_offset+1)%history_length)>(buffer_offset%history_length)) {
-                    int amount_staying_in_the_end = history_length - 1 - (last_buffer_offset%history_length);
-                    int total_amount = buffer_offset - last_buffer_offset;
-                    ssbo.update(
-                        (float*) &new_elements[0],
-                        sizeof(HistoryElement)*charges.size()*amount_staying_in_the_end,
-                        sizeof(HistoryElement)*charges.size()*((last_buffer_offset+1)%history_length)
-                    );
-                    ssbo.update(
-                        (float*) &new_elements[amount_staying_in_the_end*charges.size()],
-                        sizeof(HistoryElement)*charges.size()*(total_amount-amount_staying_in_the_end),
-                        0
-                    );
-                } else {
-                    //std::cout<<"inserting "<<sizeof(HistoryElement)*new_elements.size()<<" bytes in "<<sizeof(HistoryElement)*charges.size()*((last_buffer_offset+1)%history_length)<<std::endl;
-                    ssbo.update(
-                        (float*) &new_elements[0],
-                        sizeof(HistoryElement)*new_elements.size(),
-                        sizeof(HistoryElement)*charges.size()*((last_buffer_offset+1)%history_length)
-                    );
-                    //std::cout<<"writing in ssbo: "<<sizeof(HistoryElement)*new_elements.size()<<" bytes"<<"  in  "<< sizeof(HistoryElement)*charges.size()*((last_buffer_offset+1)%history_length) <<std::endl;
-                }
-            }
-
-            for (int i=0; i<charges.size();i++){
-                charges[i].update(time);
-            }
-            std::vector<Vec3> new_pos = MyCharges::getSpherePositions(charges);
-            vbo_sphere_position.update((float*) new_pos.data(), sizeof(Vec3)*new_pos.size(),0);
-        }
         void draw(){
             glEnable(GL_DEPTH_TEST);
             glDepthMask(GL_TRUE); 
             program.use();
             vao.bind();
-            glDrawArraysInstanced(GL_TRIANGLES, 0, vertices_amount, charges_amount),
+            glDrawArraysInstanced(GL_TRIANGLES, 0, vertices_amount, charges_amount);
             ProgramHandler::stop();
             VAOHandler::unbind();
+
+            //std::vector<float> debugger_data(1000,0.);
+            //ssbo_debugger.read(debugger_data.data(),debugger_data.size()*sizeof(float),0);
+            //Logger::flog("debugger: ",debugger_data[0], ", ",debugger_data[1], ", ",debugger_data[2],", ",debugger_data[3],",  ",debugger_data[4],", ",debugger_data[5], ", ",debugger_data[5]);
+        }
+
+        void update(){
+            program.compute((charges_amount+128-1)/128,1,1);
+            glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
         }
 };
  
@@ -793,46 +830,11 @@ struct StageDefiner{
     std::string name;
 };
 
-MovementPattern circularMotion(Vec3 center, float radius, float vel, float phase){
-    float w=vel/radius;
-    MovementPattern motion = [=](float time)->HistoryElement{
-        return {
-            {center.x+radius*((float)sin(phase+w*time)),center.y+radius*((float)cos(phase+w*time)), center.z}, time,
-            {radius*((float)cos(phase+w*time))*w, -radius*((float)sin(phase+w*time))*w, 0.}, 0.,
-            {-radius*((float)sin(phase+w*time))*w*w,-radius*((float)cos(phase+w*time))*w*w,0.},0.
-        };
-    };
-    return motion;
-}
-
-MovementPattern occilation(Vec3 center, Vec3 direction, float vel,float phase){
-    float w=vel/std::sqrt(direction.x*direction.x+direction.y*direction.y+direction.z*direction.z);
-    MovementPattern motion = [=](float time)->HistoryElement{
-        return {
-            {center.x+direction.x*((float)sin(w*time+phase)),center.y+direction.y*((float)sin(w*time+phase)), center.z+direction.z*((float)sin(w*time+phase))}, time,
-            {direction.x*w*((float)cos(w*time+phase)), direction.y*w*((float)cos(w*time+phase)), direction.z*w*((float)cos(w*time+phase))}, 0.,
-            {-direction.x*w*w*((float)sin(w*time+phase)), -direction.y*w*w*((float)sin(w*time+phase)), -direction.z*w*w*((float)sin(w*time+phase))},0.
-        };
-    };
-    return motion;
-}
-
-MovementPattern lineMotion(Vec3 start, Vec3 direction, float vel){
-    float w=vel/std::sqrt(direction.x*direction.x+direction.y*direction.y+direction.z*direction.z);
-    MovementPattern motion = [=](float time)->HistoryElement{
-        return {
-            {start.x+direction.x*vel*time,start.y+direction.y*w*time, start.z+direction.z*w*time}, time,
-            {direction.x*w, direction.y*w, direction.z*w}, 0.,
-            {0.,0.,0.},0.
-        };
-    };
-    return motion;
-}
-
 void addHerzt(std::vector<MyCharge>& charges, Vec3 position, float lambda, Vec3 amplitude, float phase, float c, float charge, float radius){
     float v = amplitude.length()*2*PI*c/lambda;
-    MyCharge charge1(position,radius,charge,-1.,{1.,0.,0.},occilation(position,amplitude,v,phase));
-    MyCharge charge2(position,radius,-charge,-1.,{0.,0.,1.},occilation(position,amplitude*(-1),v,phase));
+    float w = v/std::sqrt(amplitude.x*amplitude.x+amplitude.y*amplitude.y+amplitude.z*amplitude.z);
+    MyCharge charge1(position, {0.,0.,0.},radius,charge,-1.,{1.,0.,0.}, 1, {position.x, position.y, position.z, 0.}, {amplitude.x, amplitude.y, amplitude.z, 0.},{w,phase,0.,0.});
+    MyCharge charge2(position,{0.,0.,0.},radius,-charge,-1.,{0.,0.,1.}, 1, {position.x, position.y, position.z, 0.}, {-amplitude.x, -amplitude.y, -amplitude.z, 0.},{w,phase,0.,0.});
     charges.push_back(charge1);
     charges.push_back(charge2);
 }
@@ -855,12 +857,17 @@ void addAntenna(std::vector<MyCharge>& charges, int amount_of_herzt, Vec3 positi
 }
 
 
-int initEverything(sf::RenderWindow& window, int x, int y){
+int initEverything(sf::RenderWindow& window, uint x, uint y){
     sf::ContextSettings settings;
     settings.depthBits = 24;
-    window.create(sf::VideoMode(x, y), "VOVASOFT_TECH", sf::Style::Default, settings);
+    window.create(sf::VideoMode({x,y}), 
+                sf::String("VOVASOFT_TECH"), 
+                sf::Style::Default, 
+                sf::State::Windowed,
+                settings);
     Logger::begin("Initializing everything");
     Logger::log("Depth bits: ", settings.depthBits);
+    Logger::log("size of StaticSphericalData: ", sizeof(StaticSphericalData));
     Logger::log("size of HistoryElement: ",sizeof(HistoryElement));
     Logger::log("size of Uniforms: ",sizeof(Uniforms));
     glewExperimental = GL_TRUE;
@@ -868,20 +875,20 @@ int initEverything(sf::RenderWindow& window, int x, int y){
         std::cerr << "Помилка ініціалізації GLEW!" << std::endl;
         return -1;
     }
-    if (!ImGui::SFML::Init(window)) {
+    if (!ImGui::SFML::Init(window, true)) {
         std::cerr << "Помилка ініціалізації ImGui!"<<std::endl;
         return -1;
     }
-    window.setVerticalSyncEnabled(true);
-    //window.setFramerateLimit(60);
-
+    //window.setVerticalSyncEnabled(true);
+    window.setFramerateLimit(60);
     ImGuiIO& io = ImGui::GetIO();
-    io.Fonts->Clear(); // Очищаємо старі шрифти
+    io.Fonts->AddFontDefault();
 
 
 
-    const ImWchar* range = io.Fonts->GetGlyphRangesCyrillic();
-    ImFont* myFont = io.Fonts->AddFontFromFileTTF("DejaVuSans.ttf", 20.0f, nullptr, range);
+    const ImWchar* range = io.Fonts->GetGlyphRangesDefault();
+    ImFont* myFont = io.Fonts->AddFontFromFileTTF("DejaVuSans.ttf", 32.0f,nullptr, range);
+    io.FontDefault = myFont;
     if (myFont == nullptr) {
         char cwd[1024];
         if (getcwd(cwd, sizeof(cwd)) != NULL) {
@@ -889,9 +896,7 @@ int initEverything(sf::RenderWindow& window, int x, int y){
         }
         std::cerr << "Помилка: Не вдалося завантажити DejaVuSans.ttf!" << std::endl;
     }
-    if (!ImGui::SFML::UpdateFontTexture()) {
-        std::cerr << "Помилка: Не вдалося оновити текстуру шрифту!" << std::endl;
-    }
+
     Logger::end("Everything is initialized");
     return 0;
 }
@@ -899,27 +904,27 @@ int initEverything(sf::RenderWindow& window, int x, int y){
 void drawOpenGL(sf::RenderWindow& window, MyCharges& charges, MyArrows& arrows, State& state, UBOHandler& ubo){
 
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    ubo.update();
     if (!state.paused){
-        state.last_buffer_offset = state.buffer_offset;
-        state.buffer_offset = (int)floor(state.time);
-        charges.update(state.last_buffer_offset,state.buffer_offset,state.time);
+        charges.update();
     }
     if (state.show_spheres){
         charges.draw();
     }
 
-
-    ubo.update();
     if (state.show_E || state.show_B || state.show_P){
         arrows.draw(state.transparency_rendering_style);
+    }
+    
+    if (!state.paused){
+        state.time += state.time_per_frame;
+        state.last_buffer_offset = state.buffer_offset;
+        state.buffer_offset = (int)floor(state.time);
     }
     
     GLenum err;
     while ((err = glGetError()) != GL_NO_ERROR) {
         Logger::log("OpenGL Error: ",err);
-    }
-    if (!state.paused){
-        state.time += state.time_per_frame;
     }
 }
 
@@ -927,7 +932,7 @@ void drawImGui(sf::RenderWindow& window, sf::Time& elapsed, int& fps, State& sta
 
 
     ImGui::SFML::Update(window, elapsed);
-    ImGui::Begin("Control Panel");
+    ImGui::Begin("Control Panel 1234567890");
     if (ImGui::BeginCombo(" ", state.stages[state.currect_stage].name.c_str()))
     {
         for (int i = 0; i < state.stages.size(); i++)
@@ -943,9 +948,9 @@ void drawImGui(sf::RenderWindow& window, sf::Time& elapsed, int& fps, State& sta
     }
     ImGui::Text((std::string("FPS: ")+std::to_string(fps)).c_str());
     if (ImGui::Button(state.paused? "Run": "Stop")) {state.paused=!state.paused;}
-    ImGui::SliderFloat("Angle (1)", &state.angle_of_vertical, -90.f, 90.f);
-    ImGui::SliderFloat("Angle (2)", &state.angle_of_horizontal, 0.f, 360.f);
-    ImGui::SliderFloat("Arrows' size", &state.arrow_size,0.05f, 0.3f);
+    ImGui::DragFloat("Angle (1)", &state.angle_of_vertical,0.3f, -90.f, 90.f);
+    ImGui::DragFloat("Angle (2)", &state.angle_of_horizontal,0.3f, 0.f, 360.f);
+    ImGui::SliderFloat("Arrows' size", &state.arrow_size,0.01f, 0.3f);
     ImGui::SliderFloat("Arrows' transparency", &state.arrow_transparency_factor,0.05f, 1.f);
     ImGui::Checkbox("Electric Field", &state.show_E);
     ImGui::SliderFloat("Electric Field Factor", &state.log_factor_E,-2.0f, 2.f);
@@ -955,10 +960,8 @@ void drawImGui(sf::RenderWindow& window, sf::Time& elapsed, int& fps, State& sta
     ImGui::SliderFloat("Energy Flow Factor", &state.log_factor_P,-2.0f, 2.f);
     ImGui::SliderFloat("Common Factor", &state.log_factor_common,-2.f, 2.f);
     ImGui::SliderFloat("Amplifying Factor", &state.amplifying_factor,0.8f, 5.f);
-    ImGui::SliderFloat("Time Control Factor", &state.log_time_per_frame,-2.f, 2.f);
     ImGui::SliderInt("Transparency rendering", &state.transparency_rendering_style,0,1);
     ImGui::End();
-    state.time_per_frame = std::pow(10,state.log_time_per_frame);
 }
 
 void applyStateToUbo(State& state, UBOHandler& ubo){
@@ -969,9 +972,11 @@ void applyStateToUbo(State& state, UBOHandler& ubo){
 
     ubo.uniforms.arrow_size = state.arrow_size;
     ubo.uniforms.arrow_transparency_factor = state.arrow_transparency_factor;
-    ubo.uniforms.angle_of_rotation_2 = state.angle_of_vertical/180.*PI;
-    ubo.uniforms.angle_of_rotation = state.angle_of_horizontal/180.*PI;
-    ubo.uniforms.amplifying_factor = state.amplifying_factor;
+
+    ubo.uniforms.view = Matrix::getViewMatrix({0.,0.,0.}, 2., state.angle_of_vertical/180.*PI, state.angle_of_horizontal/180.*PI);
+    ubo.uniforms.projection = Matrix::getProjectionMatrix(45.f/180.*PI, (float)state.display_ratio, 0.1f, 5.f);
+    
+    ubo.uniforms.cameraPos = Matrix::getCameraPos({0.,0.,0.}, 2., state.angle_of_vertical/180.*PI, state.angle_of_horizontal/180.*PI);
 
     ubo.uniforms.buffer_offset = state.buffer_offset;
     
@@ -986,7 +991,6 @@ void applyStateToUbo(State& state, UBOHandler& ubo){
     ubo.uniforms.grid_size_y = state.grid_size_y;
     ubo.uniforms.grid_size_z = state.grid_size_z;
     ubo.uniforms.history_size = state.history_size;
-    ubo.uniforms.display_ratio = state.display_ratio;
 
     ubo.uniforms.amount_of_spheres = state.amount_of_charges;
     ubo.uniforms.history_element_size = state.amount_of_charges * sizeof(HistoryElement);
@@ -1027,7 +1031,7 @@ class Stage {
             window.popGLStates();
         }
         void draw(sf::RenderWindow& window, sf::Time& elapsed, int fps, UBOHandler& ubo, State& state){
-            //Logger::off();
+            Logger::off();
             Logger::begin("trying to draw");
             if (state.show_context_menu){
                 Logger::log("drawing ImGui");
@@ -1085,13 +1089,13 @@ void defineStage1(std::vector<MyCharge>& charges_vector, State& state){
 
     state.const_log_factor_E=std::log10(1/(2.*state.k*36*A/lambda/lambda));
     state.const_log_factor_B=state.const_log_factor_E;
-    state.const_log_factor_P=state.const_log_factor_B+state.const_log_factor_E+std::log10(12.*state.k/state.c/state.c);
+    state.const_log_factor_P=state.const_log_factor_B+state.const_log_factor_E+std::log10(12.*state.k/state.c/state.c)-1;
     state.const_log_factor_common=-3.;
 
     addAntenna(charges_vector,  3, {0.,0.,0.}, {2.,0.,0.},lambda,2.*A,state.c,.000000005,0.1/5.,true);
 }
 
-void defineStage3(std::vector<MyCharge>& charges_vector, State& state){
+void defineStage2(std::vector<MyCharge>& charges_vector, State& state){
     
     state.grid_size_x = 70;
     state.grid_size_y = 70;
@@ -1123,7 +1127,7 @@ void defineStage3(std::vector<MyCharge>& charges_vector, State& state){
     addAntenna(charges_vector,  5, {.5,-.5,0.5}, {2.,0.,0.},lambda,2.*A,state.c,.0000000005,0.1,true);
 }
 
-void defineStage2(std::vector<MyCharge>& charges_vector, State& state){
+void defineStage3(std::vector<MyCharge>& charges_vector, State& state){
     
     state.grid_size_x = 30;
     state.grid_size_y = 30;
@@ -1134,9 +1138,9 @@ void defineStage2(std::vector<MyCharge>& charges_vector, State& state){
     float lambda = .5;
     float A = 0.025;
 
-    state.log_factor_E=0.167;
-    state.log_factor_B=-0.276;
-    state.log_factor_P=-1.536;
+    state.log_factor_E=0.24;
+    state.log_factor_B=0.524;
+    state.log_factor_P=-0.2;
     state.log_factor_common=-0.387;
     state.arrow_size=0.067;
     state.transparency_rendering_style=1;
@@ -1152,9 +1156,10 @@ void defineStage2(std::vector<MyCharge>& charges_vector, State& state){
     state.const_log_factor_P=2*std::log10(1/(2.*state.k*36*A/lambda/lambda))+std::log10(12.*state.k/state.c/state.c);
     state.const_log_factor_common=-3.;
 
-    addAntenna(charges_vector,  1, {0.,0.,0.}, {2.,0.,0.},lambda,2.*A,state.c,.000000005,0.02,true);
-    MyCharge charge({0.5,0.,0.},0.02,1.,.01,{1.,0.,0.});
-    charges_vector.push_back(charge);
+    //addAntenna(charges_vector,  1, {0.,0.,0.}, {2.,0.,0.},lambda,2.*A,state.c,.0000000005,0.02,true);
+    for(int i=0; i<2; i++){
+        charges_vector.emplace_back(Vec3{(i-1)*0.05,0.,0.},Vec3{0.,0.,0.},0.02,2.,300.,Vec3{1.,0.,0.});
+    }
 }
 
 void defineStage4(std::vector<MyCharge>& charges_vector, State& state){
@@ -1186,24 +1191,22 @@ void defineStage4(std::vector<MyCharge>& charges_vector, State& state){
     state.const_log_factor_P=2*std::log10(1/(2.*state.k*36*A/lambda/lambda))+std::log10(12.*state.k/state.c/state.c)+2;
     state.const_log_factor_common=-3.;
 
-    MyCharge charge({0,0.,0.},0.1,1.,-1.,{1.,0.,0.},lineMotion({-10,0.,0.},{1.,0.,0.},0.0085));
+    MyCharge charge(Vec3{0,0.,0.}, Vec3{0.,0.,0.}, 0.1,1.,-1.,Vec3{1.,0.,0.},3,Vec4{-10.,0.,0.,0.},Vec4{0.0085,1.,0.,0.},Vec4{0.,0.,0.,0.});
     charges_vector.push_back(charge);
 }
 
 void defineStage5(std::vector<MyCharge>& charges_vector, State& state){
     state.grid_size_x = 30;
     state.grid_size_y = 30;
-    state.grid_size_z = 30;
+    state.grid_size_z = 1;
     state.c = 0.01;
     state.k = 0.0002;
 
-    float lambda = .5*4;
-    float A = 0.025*4;
 
-    state.log_factor_E=-0.367;
-    state.log_factor_B=-0.276;
-    state.log_factor_P=-1.536;
-    state.log_factor_common=-0.387;
+    state.log_factor_E=0.;
+    state.log_factor_B=0.;
+    state.log_factor_P=0.;
+    state.log_factor_common=0.;
     state.arrow_size=0.127;
     state.transparency_rendering_style=0;
     state.arrow_transparency_factor=1.;
@@ -1212,17 +1215,23 @@ void defineStage5(std::vector<MyCharge>& charges_vector, State& state){
     state.show_P=false;
 
 
-    state.const_log_factor_E=std::log10(1/(2.*state.k*36*A/lambda/lambda));
-    state.const_log_factor_B=state.const_log_factor_E;
-    state.const_log_factor_P=state.const_log_factor_B+state.const_log_factor_E+std::log10(12.*state.k/state.c/state.c);
+    state.const_log_factor_E=1.6+5.;
+    state.const_log_factor_B=5.;
+    state.const_log_factor_P=6.;
     state.const_log_factor_common=-3.;
 
 
     int N=3;
+    float radius = 0.05;
+    float w = -0.002/radius;
     for (int n=0; n<N; n+=1){
-        charges_vector.emplace_back(Vec3{0.,0.,0.},0.02,1,-1.,Vec3{1.,0.,0.},circularMotion({0,0,0},0.05,0.002,2*PI*n/N));
-        charges_vector.emplace_back(Vec3{0.,0.,0.},0.02,-1,-1.,Vec3{0.,0.,1.},circularMotion({0,0,0},0.05,-0.002,2*PI*n/N));
+        charges_vector.emplace_back(Vec3{0.,0.,0.}, Vec3{0.,0.,0.}, 0.02,1.,-1.,Vec3{1.,0.,0.},2,Vec4{0.,0.,0.,0.},Vec4{0.,0.,-1.,0.},Vec4{w,2*PI*n/N,radius,0.});
+        charges_vector.emplace_back(Vec3{0.,0.,0.}, Vec3{0.,0.,0.}, 0.02,-1.,-1.,Vec3{0.,0.,1.},2,Vec4{0.,0.,0.,0.},Vec4{0.,0.,-1.,0.},Vec4{-w,2*PI*n/N,radius,0.});
     }
+
+    //charges_vector.emplace_back(Vec3{0.,0.,0.}, Vec3{0.,0.,0.}, 0.02,1.,1.,Vec3{1.,0.,0.},2,Vec4{0.,0.,0.,0.},Vec4{0.,0.,-1.,0.},Vec4{w,0.,radius,0.});
+
+
 }
 
 void defineStage6(std::vector<MyCharge>& charges_vector, State& state){
@@ -1262,12 +1271,88 @@ void defineStage6(std::vector<MyCharge>& charges_vector, State& state){
     }
 }
 
+void defineStage7(std::vector<MyCharge>& charges_vector, State& state){
+    
+    state.grid_size_x = 30;
+    state.grid_size_y = 30;
+    state.grid_size_z = 30;
+    state.c = 0.01;
+    state.k = 0.0002;
+
+    float lambda = .5;
+    float A = 0.025;
+
+    state.log_factor_E=0.167;
+    state.log_factor_B=-0.276;
+    state.log_factor_P=0.68;
+    state.log_factor_common=-0.387;
+    state.arrow_size=0.067;
+    state.transparency_rendering_style=1;
+    state.arrow_transparency_factor=1.;
+    state.show_E=false;
+    state.show_B=false;
+    state.show_P=true;
+
+
+
+    state.const_log_factor_E=2.+std::log10(1/(2.*state.k*36*A/lambda/lambda));
+    state.const_log_factor_B=std::log10(1/(2.*state.k*36*A/lambda/lambda));
+    state.const_log_factor_P=2*std::log10(1/(2.*state.k*36*A/lambda/lambda))+std::log10(12.*state.k/state.c/state.c);
+    state.const_log_factor_common=-3.;
+    
+    float v = 0.002;
+    float e = 1.;
+    float m = 1000.;
+    float r = state.k * e * e/ 4 / v / v / m;
+    //addAntenna(charges_vector,  1, {0.,0.,0.}, {2.,0.,0.},lambda,2.*A,state.c,.0000000005,0.02,true);
+    charges_vector.emplace_back(Vec3{r,0.,0.},Vec3{0.,v,0.},0.02,e,m,Vec3{1.,0.,0.});
+    charges_vector.emplace_back(Vec3{-r,0.,0.},Vec3{0.,-v,0.},0.02,-e,m,Vec3{0.,0.,1.});
+}
+
+void defineStage8(std::vector<MyCharge>& charges_vector, State& state){
+    
+    state.grid_size_x = 30;
+    state.grid_size_y = 30;
+    state.grid_size_z = 30;
+    state.c = 0.01;
+    state.k = 0.0002;
+
+    float lambda = .5;
+    float A = 0.025;
+
+    state.log_factor_E=0.167;
+    state.log_factor_B=-0.276;
+    state.log_factor_P=0.68;
+    state.log_factor_common=-0.387;
+    state.arrow_size=0.067;
+    state.transparency_rendering_style=1;
+    state.arrow_transparency_factor=1.;
+    state.show_E=false;
+    state.show_B=false;
+    state.show_P=true;
+
+
+
+    state.const_log_factor_E=2.+std::log10(1/(2.*state.k*36*A/lambda/lambda));
+    state.const_log_factor_B=std::log10(1/(2.*state.k*36*A/lambda/lambda));
+    state.const_log_factor_P=2*std::log10(1/(2.*state.k*36*A/lambda/lambda))+std::log10(12.*state.k/state.c/state.c);
+    state.const_log_factor_common=-3.;
+    
+    float v = 0.002;
+    float e = 1.;
+    float m = 1000.;
+    float r = 1000.;
+    float R = state.k * e * e / v / v / m * r/(r+1.);
+    //addAntenna(charges_vector,  1, {0.,0.,0.}, {2.,0.,0.},lambda,2.*A,state.c,.0000000005,0.02,true);
+
+    charges_vector.emplace_back(Vec3{-R/(r+1),0.,0.},Vec3{0.,-v/r,0.},0.04,e,r*m,Vec3{1.,0.,0.});
+    charges_vector.emplace_back(Vec3{R*r/(r+1),0.,0.},Vec3{0.,v,0.},0.02,-e,m,Vec3{0.,0.,1.});
+}
 
 int main() {
     sf::RenderWindow window;
     sf::Clock clock;
     sf::Time elapsed;
-    sf::Event event;
     int fps;
     State state;
     if (initEverything(window,state.display_x,state.display_y)){return -1;}//if (initEverything(window,1280,720)){return -1;}
@@ -1275,12 +1360,15 @@ int main() {
     UBOHandler ubo(uniforms_init);
 
 
-    state.stages={{defineStage1, "Single Antena"},
-    {defineStage3, "Interfearing Antenas"},
-    {defineStage2, "Simpel Herz"},
-    {defineStage4, "Moving Charge"},
-    {defineStage5, "Cyclotron"},
-    {defineStage6, "circular polarization"}
+    state.stages={
+        {defineStage1, "Single Antena"},
+        {defineStage2, "Interfearing Antenas"},
+        {defineStage3, "Simpel Herz"},
+        {defineStage4, "Moving Charge"},
+        {defineStage5, "Cyclotron"},
+        {defineStage6, "circular polarization"},
+        {defineStage7, "electron - positron"},
+        {defineStage8, "atom"}
     };
     std::unique_ptr<Stage> stage = createStage(state.stages[state.currect_stage].defineStage);
     stage->activate(window,state);
@@ -1289,16 +1377,16 @@ int main() {
         elapsed = clock.restart();
         fps = static_cast<int>(1.0f / elapsed.asSeconds());
 
-        while (window.pollEvent(event)) {
-            ImGui::SFML::ProcessEvent(window, event);
-            if (event.type == sf::Event::Closed) window.close();
-            if (event.type == sf::Event::KeyPressed) {
-                if (event.key.code == sf::Keyboard::K) {
-                    state.show_context_menu = !state.show_context_menu;
-                }
-                if (event.key.code == sf::Keyboard::P) {
-                    state.paused = !state.paused;
-                }
+        while (const std::optional event = window.pollEvent()) {
+            if (event->is<sf::Event::KeyPressed>() && sf::Keyboard::isKeyPressed(sf::Keyboard::Key::P)){
+                state.paused = !state.paused;
+            }
+            if (event->is<sf::Event::KeyPressed>() && sf::Keyboard::isKeyPressed(sf::Keyboard::Key::K)){
+                state.show_context_menu = !state.show_context_menu;
+            }
+            ImGui::SFML::ProcessEvent(window, *event);
+            if (event->is<sf::Event::Closed>()) {
+                window.close();
             }
         }
 
@@ -1313,4 +1401,4 @@ int main() {
         }
     }
     return 0;
-}
+} 

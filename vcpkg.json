@@ -1,0 +1,10 @@
+{
+  "name": "physics-app",
+  "version-string": "1.0.0",
+  "dependencies": [
+    "sfml",
+    "glew",
+    "imgui-sfml",
+    "opengl"
+  ]
+}

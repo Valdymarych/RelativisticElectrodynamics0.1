@@ -44,11 +44,11 @@ layout(std140, binding = 0) uniform Uniforms {
     float arrow_size;
     float arrow_transparency_factor;
 
-    float amplifying_factor;
-    float display_ratio;
-    float angle_of_rotation;
-    float angle_of_rotation_2;
+    mat4 view;
+    mat4 projection;
 
+    vec4 cameraPos;
+    
     uint display_mode;
     uint grid_size_x;
     uint grid_size_y;
@@ -110,7 +110,7 @@ Field get_field(vec3 pos){
         last_sphere = spheres.history[((l+uf.buffer_offset)%uf.history_size*uf.amount_of_spheres)+sp];
         next_sphere = spheres.history[((r+uf.buffer_offset)%uf.history_size*uf.amount_of_spheres)+sp];
         koef = 1.;//-(uf.c*(uf.time-next_sphere.pos.w)-length(next_sphere.pos.xyz-pos))/(uf.c*(next_sphere.pos.w-last_sphere.pos.w)-length(last_sphere.pos.xyz-pos)+length(next_sphere.pos.xyz-pos));
-        koef2 = 0.;//1-koef;
+        koef2 = 0.;1-koef;
 
         average_sphere=SphereState(
             last_sphere.pos*koef+next_sphere.pos*koef2,
@@ -148,7 +148,11 @@ Field get_field(vec3 pos){
 void main() {
     uvec3 pos = gl_GlobalInvocationID;
     if (pos.x >= uf.grid_size_x || pos.y >= uf.grid_size_y || pos.z >= uf.grid_size_z) return;
-    vec3 position = pos*2./uf.grid_size_x-vec3(1.,1.,1.);
+    vec3 position = 2.*vec3(
+            (pos.x+1.)/(uf.grid_size_x+1.),
+            (pos.y+1.)/(uf.grid_size_y+1.),
+            (pos.z+1.)/(uf.grid_size_z+1.)
+        )-vec3(1.,1.,1.);
     uint index = pos.z * (uf.grid_size_x * uf.grid_size_y) + (pos.y * uf.grid_size_x) + pos.x;
 
     Field f = get_field(position);

@@ -22,10 +22,10 @@ layout(std140, binding = 0) uniform Uniforms {
     float arrow_size;
     float arrow_transparency_factor;
 
-    float amplifying_factor;
-    float display_ratio;
-    float angle_of_rotation;
-    float angle_of_rotation_2;
+    mat4 view;
+    mat4 projection;
+
+    vec4 cameraPos;
 
     uint display_mode;
     uint grid_size_x;
@@ -41,15 +41,9 @@ layout(std140, binding = 0) uniform Uniforms {
     float time_per_frame;
 } uf;
 
-vec3 apply_rotation(vec3 pos){
-    vec3 uv_proto=vec3(pos.x*cos(uf.angle_of_rotation)+pos.z*sin(uf.angle_of_rotation),pos.y,pos.z*cos(uf.angle_of_rotation)-pos.x*sin(uf.angle_of_rotation));
-    return vec3(uv_proto.x,uv_proto.y*cos(uf.angle_of_rotation_2)+uv_proto.z*sin(uf.angle_of_rotation_2),uv_proto.z*cos(uf.angle_of_rotation_2)-uv_proto.y*sin(uf.angle_of_rotation_2));
-}
- 
-vec3 to_uv(vec3 pos){
-    vec3 uv_proto = apply_rotation(pos);
-    return vec3(uv_proto.x/(2.+uv_proto.z)*uf.display_ratio*uf.amplifying_factor,uv_proto.y/(2.+uv_proto.z)*uf.amplifying_factor, (uv_proto.z+2.)/10.);
-}
+layout(std430, binding = 4) buffer debuggerBuffer {
+    float debugger[];
+};
 
 out vec4 color_out;
 void main() {
@@ -65,8 +59,11 @@ void main() {
     uint x = index % uf.grid_size_x;
     uint y = (index / uf.grid_size_x) % uf.grid_size_y;
     uint z = index / (uf.grid_size_x * uf.grid_size_y);
-    vec3 pos_grid = vec3(x,y,z)*2./uf.grid_size_x-vec3(1.,1.,1.);
-
+    vec3 pos_grid = 2.*vec3(
+            (x+1.)/(uf.grid_size_x+1.),
+            (y+1.)/(uf.grid_size_y+1.),
+            (z+1.)/(uf.grid_size_z+1.)
+        )-vec3(1.,1.,1.);
     vec4 arrow;
     vec3 basic_color;
     float factor;
@@ -74,19 +71,12 @@ void main() {
     if (arrow_type==1){arrow=arrows[index].B;basic_color=vec3(0.,0.,1.);factor=uf.factor_B;}
     if (arrow_type==2){arrow=arrows[index].P;basic_color=vec3(1.,1.,1.);factor=uf.factor_P;}
 
+    vec3 toCamera = normalize(uf.cameraPos.xyz - pos_grid);
+    vec3 along = normalize(arrow.xyz);
+    vec3 tempUp = cross(toCamera,along);
+    vec3 end_pos = pos_grid + (along*position.z + tempUp*position.y)*uf.arrow_size;
 
-
-    vec3 tempUp = abs(arrow.y) < 0.9 ? vec3(0, 1, 0) : vec3(1, 0, 0);
-
-    vec3 right = normalize(cross(tempUp, arrow.xyz));
-    vec3 up = cross(arrow.xyz, right);
-    mat3 transform = mat3(right, up, arrow.xyz);
-
-    vec3 final_pos = pos_grid+transform*position*uf.arrow_size;
-
-    vec3 uv = to_uv(final_pos);
-
+    vec4 uv = uf.projection*uf.view*vec4(end_pos,1.);
     color_out = clamp(arrow.w*factor*uf.factor_common,0.,1.)*vec4(basic_color,uf.arrow_transparency_factor);
-    gl_Position = vec4(uv, 1.0);
-
+    gl_Position = uv;
 }
