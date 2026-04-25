@@ -1373,7 +1373,6 @@ int main() {
     std::unique_ptr<Stage> stage = createStage(state.stages[state.currect_stage].defineStage);
     stage->activate(window,state);
     while (window.isOpen()) {
-        // Рахуємо FPS
         elapsed = clock.restart();
         fps = static_cast<int>(1.0f / elapsed.asSeconds());
 
