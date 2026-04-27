@@ -1,4 +1,4 @@
-To download this project:
+### INSTALLING:
 ```bush
     git clone https://github.com/Valdymarych/RelativisticElectrodynamics0.1.git
     cd RelativisticElectrodynamics0.1
