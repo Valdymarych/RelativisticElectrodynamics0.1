@@ -102,6 +102,9 @@ void drawImGui(sf::RenderWindow& window, sf::Time& elapsed, int& fps, State& sta
     ImGui::TextUnformatted("  ");
     ImGui::SameLine(50.0f);
     ImGui::DragFloat("##bs", &state.angle_of_horizontal,0.3f, 0.f, 360.f);
+    ImGui::TextUnformatted("Zoom: ");
+    ImGui::SameLine(100.0f);
+    ImGui::DragFloat("##bsf", &state.amplifying_factor,0.001f, 0.5f, 3.f);
     ImGui::Dummy(ImVec2(0,10)); 
 
 
@@ -163,10 +166,10 @@ void applyStateToUbo(State& state, UBOHandler& ubo){
     ubo.uniforms.arrow_size = state.arrow_size;
     ubo.uniforms.arrow_transparency_factor = state.arrow_transparency_factor;
 
-    ubo.uniforms.view = Matrix::getViewMatrix({0.,0.,0.}, 2., state.angle_of_vertical/180.*PI, state.angle_of_horizontal/180.*PI);
+    ubo.uniforms.view = Matrix::getViewMatrix({0.,0.,0.}, 2./state.amplifying_factor, state.angle_of_vertical/180.*PI, state.angle_of_horizontal/180.*PI);
     ubo.uniforms.projection = Matrix::getProjectionMatrix(45.f/180.*PI, (float)state.display_ratio, 0.1f, 5.f);
     
-    ubo.uniforms.cameraPos = Matrix::getCameraPos({0.,0.,0.}, 2., state.angle_of_vertical/180.*PI, state.angle_of_horizontal/180.*PI);
+    ubo.uniforms.cameraPos = Matrix::getCameraPos({0.,0.,0.}, 2./state.amplifying_factor, state.angle_of_vertical/180.*PI, state.angle_of_horizontal/180.*PI);
 
     ubo.uniforms.buffer_offset = state.buffer_offset;
     
