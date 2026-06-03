@@ -101,6 +101,7 @@ class ProgramHandler {
             if (!hasComputeShader){
                 Logger::log("Програма не має compute shader");
             }
+            
             glUseProgram(compute_ID);
             glDispatchCompute(x,y,z);
         }

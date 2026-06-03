@@ -73,7 +73,7 @@ void drawOpenGL(sf::RenderWindow& window, MyCharges& charges, MyArrows& arrows, 
     }
 }
 
-void drawImGui(sf::RenderWindow& window, sf::Time& elapsed, int& fps, State& state){
+void drawImGui(sf::RenderWindow& window, sf::Time& elapsed, State& state){
     ImGuiIO& io = ImGui::GetIO();
     ImGui::SFML::Update(window, elapsed);
     //ImGui::ShowDemoWindow();
@@ -92,7 +92,7 @@ void drawImGui(sf::RenderWindow& window, sf::Time& elapsed, int& fps, State& sta
         }
         ImGui::EndCombo();
     }
-    ImGui::Text("FPS: %0.1f", (float)fps);
+    ImGui::Text("FPS: %0.1f", (float)state.fps);
     if (ImGui::Button(state.paused? "Run": "Stop")) {state.paused=!state.paused;}
 
     ImGui::TextUnformatted("Point of View: ");
@@ -192,7 +192,6 @@ void applyStateToUbo(State& state, UBOHandler& ubo){
     ubo.uniforms.time_per_frame = state.time_per_frame;
 }
 
-
 class Stage {
     private:
 
@@ -223,13 +222,13 @@ class Stage {
                         Logger::end("Stage is activated");
             //window.popGLStates();
         }
-        void draw(sf::RenderWindow& window, sf::Time& elapsed, int fps, UBOHandler& ubo, State& state){
+        void draw(sf::RenderWindow& window, sf::Time& elapsed, UBOHandler& ubo, State& state){
 
                         Logger::off();
                         Logger::begin("trying to draw");
             if (state.show_context_menu){
                 Logger::log("drawing ImGui");
-                drawImGui(window, elapsed, fps, state);
+                drawImGui(window, elapsed, state);
             }
             window.clear();
                         Logger::log("clearing GL_DEPTH_BUFFER_BIT");

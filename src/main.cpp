@@ -17,7 +17,6 @@ int main() {
     sf::RenderWindow window;
     sf::Clock clock;
     sf::Time elapsed;
-    int fps;
     State state;
     if (initEverything(window,state.display_x,state.display_y)){return -1;}
     Uniforms uniforms_init;
@@ -39,10 +38,10 @@ int main() {
     stage->activate(window,state);
     while (window.isOpen()) {
         elapsed = clock.restart();
-        fps = static_cast<int>(1.0f / elapsed.asSeconds());
+        state.fps = static_cast<int>(1.0f / elapsed.asSeconds());
 
         stage->handleEvents(state,window);
-        stage->draw(window,elapsed,fps,ubo,state);
+        stage->draw(window,elapsed,ubo,state);
         handleReplacingOfStage(state,stage,window);
     }
     return 0;

@@ -29,9 +29,9 @@ void addAntenna(std::vector<MyCharge>& charges, int amount_of_herzt, Vec3 positi
 
 void defineStage1(std::vector<MyCharge>& charges_vector, State& state){
     
-    state.grid_size_x= 70;
-    state.grid_size_y= 70;
-    state.grid_size_z= 70;
+    state.grid_size_x= 64;
+    state.grid_size_y= 64;
+    state.grid_size_z= 64;
     state.c = 0.01;
     state.k = 0.0002;
 

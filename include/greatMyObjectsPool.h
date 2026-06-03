@@ -153,17 +153,20 @@ class MyCharges{
  
 class MyArrows{
     private:
-        ProgramHandler program;
-        VAOHandler vao;
-        int arrows_amount;
-
-        SSBOHandler ssbo;
+        ProgramHandler program;   // має бути програма
+        VBOHandler vbo_arrow_points;  // має бути VBO для вершин стрілки
+        VAOHandler vao;           // має бути VAO для glDrawArraysInstanced 
+        int arrows_amount;        // має бути для ssbo і glDrawArraysInstanced
+        SSBOHandler ssbo;         // має бути для FieldDataBuffer в compute shader (index = 1) 
+        SSBOHandler ssbo_pivot_points;
         
+        const int FieldDataSize = 12; // по 4 на кожний тип поля.
         float arrow_points[18] = {
             0.,0.,0.,    0.,0.1,0.8,   0.,-0.1,0.8, 
             0.,0.3,0.8,  0.,0.,1.,     0.,-0.3,0.8
-        };
-        VBOHandler vbo_arrow_points;
+        };                         // стрілка, по дефолту дивиться в напрямку +Z, так що ребро йде вздовд +Y. З довжиною 1., і шириною 0.6 (від -0.3 до 0.3)
+        const int amount_of_arrow_points = 2*3;
+        
         static std::vector<Vec3> getPivotPoints(Vec3 start, Vec3 size, Vec3 step){
             std::vector<Vec3> pivot_points;
             for (float x=start.x; x<=start.x+size.x;x=x+step.x){
@@ -181,45 +184,61 @@ class MyArrows{
         u_int grid_size_x;
         u_int grid_size_y;
         u_int grid_size_z;
-        MyArrows(){
-
-        }
+        MyArrows(){}
         void init(u_int grid_size_x_, u_int grid_size_y_, u_int grid_size_z_, std::string path){
-            program.init(path,{1,0,1},true);
-            vbo_arrow_points.init(arrow_points,sizeof(arrow_points),GL_STATIC_DRAW);
             grid_size_x = grid_size_x_;
             grid_size_y = grid_size_y_;
             grid_size_z = grid_size_z_;
             arrows_amount = grid_size_x * grid_size_y * grid_size_z_;
             
-
+            program.init(path,{1,0,1},true);
+            vbo_arrow_points.init(arrow_points,sizeof(arrow_points),GL_STATIC_DRAW);
             vbo_arrow_points.configure(0,3,0,0,0);
             vao.bind();
             vbo_arrow_points.bind_configuration();
             VAOHandler::unbind();
-            ssbo.init(NULL,arrows_amount*12*4,1,GL_DYNAMIC_COPY);
+            ssbo.init(NULL,arrows_amount*FieldDataSize*4,1,GL_DYNAMIC_COPY);
+        }
+        void init(float* pivot_points, u_int points_amount, std::string path){
+            arrows_amount = points_amount;
+            
+            program.init(path,{1,0,1},true);
+            vbo_arrow_points.init(arrow_points,sizeof(arrow_points),GL_STATIC_DRAW);
+            vbo_arrow_points.configure(0,3,0,0,0);
+            vao.bind();
+            vbo_arrow_points.bind_configuration();
+            VAOHandler::unbind();
+            ssbo.init(NULL,arrows_amount*FieldDataSize*4,1,GL_DYNAMIC_COPY);
         }
         MyArrows (u_int grid_size_x, u_int grid_size_y, u_int grid_size_z, std::string path)
         {
             init(grid_size_x, grid_size_y, grid_size_z, path);
         }
+
+        MyArrows (float* pivot_points, u_int points_amount, std::string path)
+        {
+            init(pivot_points, points_amount, path);
+        }
+
         ~MyArrows (){
 
         }
         void draw(int blendMode){
             glEnable(GL_BLEND);
-            if (blendMode==1){
-                glBlendFunc(GL_SRC_ALPHA, GL_ONE);
-            }
-            if (blendMode==0){
-                glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-            }
+            if (blendMode==1){glBlendFunc(GL_SRC_ALPHA, GL_ONE);}
+            if (blendMode==0){glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);}
             glDepthMask(GL_FALSE);
-            program.compute((grid_size_x+8-1)/8,(grid_size_y+8-1)/8,(grid_size_z+8-1)/8);
+
+
+            program.compute((grid_size_x+8-1)/8,(grid_size_y+8-1)/8,(grid_size_z+8-1)/8);  // розрахунок полів і запис в ssbo
+            
             vao.bind();
             program.use();
-            glDrawArraysInstanced(GL_TRIANGLES, 0, 6, arrows_amount*3);
-            //glDrawArrays(GL_POINTS, 0, points_amount);
+
+
+            glDrawArraysInstanced(GL_TRIANGLES, 0, amount_of_arrow_points, arrows_amount*3); // малювання стрілок починаючи з 0, кожна по amount_of_arrow_points точок, і кожна з стрілка це наспрвді 3 поля
+
+
             VAOHandler::unbind();
             ProgramHandler::stop();
         }

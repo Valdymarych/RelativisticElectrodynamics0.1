@@ -1,5 +1,5 @@
 #version 430 core
-layout(local_size_x = 8, local_size_y = 8, local_size_z = 8) in;
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
 
 struct SphereState {
     vec4 pos;
@@ -13,17 +13,11 @@ struct Field {
     vec3 p;
 };
 
-struct Arrow {
-    vec3 n;
-    float color;
-};
-
 struct FieldData {
     vec4 E;
     vec4 B;
     vec4 P;
 };
-
 
 layout(std430, binding = 1) buffer FieldDataBuffer {
     FieldData arrows[];

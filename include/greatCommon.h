@@ -200,6 +200,8 @@ struct State {
     int currect_stage=0;
     int intended_to_be_selected_stage=-1;
     bool show_context_menu = false;
+
+    int fps=0;
 };
 
 class MyCharge{
