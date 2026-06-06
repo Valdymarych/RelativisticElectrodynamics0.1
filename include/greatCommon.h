@@ -146,6 +146,8 @@ struct Uniforms {
 
     float time;
     float time_per_frame;
+    float magnetic_permeability_inv;
+    int history_size_log;
 };
 
 struct StageDefiner;
@@ -202,6 +204,8 @@ struct State {
     bool show_context_menu = false;
 
     int fps=0;
+    float magnetic_permeability_inv=(0.01*0.01)/(12.56*0.0002);
+    int history_size_log=10;
 };
 
 class MyCharge{

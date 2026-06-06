@@ -190,6 +190,8 @@ void applyStateToUbo(State& state, UBOHandler& ubo){
 
     ubo.uniforms.time = state.time;
     ubo.uniforms.time_per_frame = state.time_per_frame;
+    ubo.uniforms.magnetic_permeability_inv = state.magnetic_permeability_inv;
+    ubo.uniforms.history_size_log = state.history_size_log;
 }
 
 class Stage {
@@ -213,6 +215,8 @@ class Stage {
             state.time=0;
             state.buffer_offset=-1;
             state.amount_of_charges = charges_vector.size();
+            state.history_size_log = int(log2(state.history_size));
+            state.magnetic_permeability_inv = (state.c*state.c)/(12.56*state.k);
                         Logger::begin("initializing charges");
             charges.init(state.charge_detailing,state.history_size,"shaders/spheres_shader",charges_vector);
                         Logger::end("Charges is initialized");

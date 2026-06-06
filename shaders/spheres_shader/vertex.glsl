@@ -1,4 +1,3 @@
-#version 430
 layout(location = 0) in vec3 position_mesh;
 
 struct StaticSphericalData {
@@ -13,11 +12,6 @@ struct StaticSphericalData {
     vec4 param3;
 };
 
-struct SphereState {
-    vec4 pos;
-    vec4 vel;
-    vec4 acc;
-};
 
 layout(std430, binding = 2) buffer staticSphericalDataBuffer {
     StaticSphericalData staticSphericalData[];
@@ -30,37 +24,6 @@ layout(std430, binding = 3) buffer presentSphericalDataBuffer {
 layout(std430, binding = 4) buffer debuggerBuffer {
     float debugger[];
 };
-
-layout(std140, binding = 0) uniform Uniforms {
-    int buffer_offset;
-    int history_element_size;
-    int amount_of_spheres;
-    int history_size;
-
-    float c;
-    float k;
-    float arrow_size;
-    float arrow_transparency_factor;
-
-    mat4 view;
-    mat4 projection;
-
-    vec4 cameraPos;
-
-    uint display_mode;
-    uint grid_size_x;
-    uint grid_size_y;
-    uint grid_size_z;
-
-    float factor_E;
-    float factor_B;
-    float factor_P;
-    float padding;
-
-    float time;
-    float time_per_frame;
-} uf;
-
 
 vec4 to_uv(vec3 pos){
     return uf.projection * uf.view * vec4(pos,1.);

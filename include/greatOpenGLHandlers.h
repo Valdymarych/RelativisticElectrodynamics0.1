@@ -14,13 +14,17 @@ class ProgramHandler {
         bool hasComputeShader=false;
         unsigned int compute_ID;
 
-        void checkErrorsShaders(unsigned int shader, std::string type) {
+        void checkErrorsShaders(unsigned int shader, std::vector<std::string> paths) {
             int success;
             char infoLog[1024];
             glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
             if (!success) {
                 glGetShaderInfoLog(shader, 1024, NULL, infoLog);
-                std::cerr << "ERROR: Помилка компіляції шейдера: " << type << "\n" << infoLog << std::endl;
+                std::cerr << "ERROR: Помилка компіляції шейдера: ";
+                for (int i=0;i<paths.size();i++){
+                    std::cout << paths[i] << " ";
+                }
+                std::cout << "\n" << infoLog << std::endl;
             }
         }
 
@@ -38,14 +42,23 @@ class ProgramHandler {
             }
         }
 
-        unsigned int get_shader(std::string path, GLenum type){
+        unsigned int get_shader(const std::vector<std::string>& paths, GLenum type){
+            std::string version_line = "#version 430 core\n";
 
-            const std::string source = extractShader(path);
-            const char* souce_for_opengl = source.c_str();
+            std::vector<std::string> sources_string;
+            std::vector<const char*> sources_char;
+            sources_string.reserve(paths.size()+1);
+            sources_char.reserve(paths.size()+1);
+            sources_string.push_back(version_line);
+            sources_char.push_back(sources_string[0].c_str());
+            for (int i=0; i<paths.size();i++){
+                sources_string.push_back(extractShader(paths[i]));
+                sources_char.push_back(sources_string[i+1].c_str());
+            }
             unsigned int shader = glCreateShader(type);
-            glShaderSource(shader, 1, &souce_for_opengl, NULL);
+            glShaderSource(shader, sources_char.size(), sources_char.data(), NULL);
             glCompileShader(shader);
-            checkErrorsShaders(shader, path);
+            checkErrorsShaders(shader, paths);
             return shader;
         }
 
@@ -53,41 +66,34 @@ class ProgramHandler {
         ProgramHandler(){
 
         }
-        ProgramHandler(std::string path, std::vector<bool> shader_types){
-            init(path,shader_types);
+        ProgramHandler(std::vector<std::vector<std::string>>& paths){   //  [ "vertex.glsl" , "geometry.glsl" , "fragment.glsl" , "compute.glsl" ]
+            init(paths);
         }
-        ProgramHandler(std::string path, std::vector<bool> shader_types, bool hasComputeShader_):ProgramHandler(path,shader_types){
-            init(path,shader_types,hasComputeShader_);
-        }
-        void init(std::string path, std::vector<bool> shader_types){
+        void init(const std::vector<std::vector<std::string>>& paths){
             unsigned int vertShader;
             unsigned int geomShader;
             unsigned int fragShader;
-            if (shader_types[0]){vertShader = get_shader(path+"/vertex.glsl",GL_VERTEX_SHADER);}
-            if (shader_types[1]){geomShader = get_shader(path+"/geometry.glsl",GL_GEOMETRY_SHADER);}
-            if (shader_types[2]){fragShader = get_shader(path+"/fragment.glsl",GL_FRAGMENT_SHADER);}
             ID = glCreateProgram();
-            if (shader_types[0]){glAttachShader(ID, vertShader);}
-            if (shader_types[1]){glAttachShader(ID, geomShader);}
-            if (shader_types[2]){glAttachShader(ID, fragShader);}
+            if (paths[0].size()>0){vertShader = get_shader(paths[0],GL_VERTEX_SHADER);glAttachShader(ID, vertShader);}
+            if (paths[1].size()>0){geomShader = get_shader(paths[1],GL_GEOMETRY_SHADER);glAttachShader(ID, geomShader);}
+            if (paths[2].size()>0){fragShader = get_shader(paths[2],GL_FRAGMENT_SHADER);glAttachShader(ID, fragShader);}
             glLinkProgram(ID);
             checkErrorsProgram(ID, "render");
-            if (shader_types[0]){glDeleteShader(vertShader);}
-            if (shader_types[1]){glDeleteShader(geomShader);}
-            if (shader_types[2]){glDeleteShader(fragShader);}
-        }
-        void init(std::string path, std::vector<bool> shader_types, bool hasComputeShader_){
-            init(path,shader_types);
-            hasComputeShader=hasComputeShader_;
-            if(hasComputeShader){
-                unsigned int compShader = get_shader(path+"/compute.glsl",GL_COMPUTE_SHADER);
+            if (paths[0].size()>0){glDeleteShader(vertShader);}
+            if (paths[1].size()>0){glDeleteShader(geomShader);}
+            if (paths[2].size()>0){glDeleteShader(fragShader);}
+            
+            if(paths[3].size()>0){
+                hasComputeShader=true;
+                unsigned int compShader = get_shader(paths[3],GL_COMPUTE_SHADER);
                 compute_ID = glCreateProgram();
                 glAttachShader(compute_ID, compShader);
                 glLinkProgram(compute_ID);
                 checkErrorsProgram(compute_ID,"compute");
                 glDeleteShader(compShader);
-            }
+            } else {hasComputeShader=false;}
         }
+
         ~ProgramHandler(){
             glDeleteProgram(ID);
             if (hasComputeShader){
@@ -122,6 +128,8 @@ class SSBOHandler{
             ID=0;
         }
         void init(float data[], size_t data_size, GLuint index, GLenum usage){
+            // data_size:   in bytes
+            // usage:  GL_STATIC_READ,  GL_DYNAMIC_DRAW... and so on
             glGenBuffers(1,&ID);
             glBindBuffer(GL_SHADER_STORAGE_BUFFER, ID);
             glBufferData(GL_SHADER_STORAGE_BUFFER, data_size, data, usage);

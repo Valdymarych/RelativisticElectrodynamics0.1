@@ -1,48 +1,15 @@
-#version 430
 layout(location = 0) in vec3 position;
-
-struct FieldData {
-    vec4 E;
-    vec4 B;
-    vec4 P;
-};
 
 layout(std430, binding = 1) buffer FieldDataBuffer {
     FieldData arrows[];
 };
 
-layout(std140, binding = 0) uniform Uniforms {
-    int buffer_offset;
-    int history_element_size;
-    int amount_of_spheres;
-    int history_size;
-
-    float c;
-    float k;
-    float arrow_size;
-    float arrow_transparency_factor;
-
-    mat4 view;
-    mat4 projection;
-
-    vec4 cameraPos;
-
-    uint display_mode;
-    uint grid_size_x;
-    uint grid_size_y;
-    uint grid_size_z;
-
-    float factor_E;
-    float factor_B;
-    float factor_P;
-    float factor_common;
-
-    float time;
-    float time_per_frame;
-} uf;
-
 layout(std430, binding = 4) buffer debuggerBuffer {
     float debugger[];
+};
+
+layout(std430, binding = 5) buffer PivotPointsBuffer {
+    PivotPoint pivot_points[];
 };
 
 out vec4 color_out;
@@ -56,20 +23,16 @@ void main() {
         return;
     }
 
-    uint x = index % uf.grid_size_x;
-    uint y = (index / uf.grid_size_x) % uf.grid_size_y;
-    uint z = index / (uf.grid_size_x * uf.grid_size_y);
-    vec3 pos_grid = 2.*vec3(
-            (x+1.)/(uf.grid_size_x+1.),
-            (y+1.)/(uf.grid_size_y+1.),
-            (z+1.)/(uf.grid_size_z+1.)
-        )-vec3(1.,1.,1.);
+    vec3 pos_grid = pivot_points[index].pos.xyz;
+
+
     vec4 arrow;
     vec3 basic_color;
     float factor;
-    if (arrow_type==0){arrow=arrows[index].E;basic_color=vec3(1.,0.,0.);factor=uf.factor_E;}
-    if (arrow_type==1){arrow=arrows[index].B;basic_color=vec3(0.,0.,1.);factor=uf.factor_B;}
-    if (arrow_type==2){arrow=arrows[index].P;basic_color=vec3(1.,1.,1.);factor=uf.factor_P;}
+    FieldData field_data = arrows[index];
+    if (arrow_type==0){arrow=field_data.E;basic_color=vec3(1.,0.,0.);factor=uf.factor_E;}
+    if (arrow_type==1){arrow=field_data.B;basic_color=vec3(0.,0.,1.);factor=uf.factor_B;}
+    if (arrow_type==2){arrow=field_data.P;basic_color=vec3(1.,1.,1.);factor=uf.factor_P;}
 
     vec3 toCamera = normalize(uf.cameraPos.xyz - pos_grid);
     vec3 along = normalize(arrow.xyz);
