@@ -183,8 +183,8 @@ void defineStage5(std::vector<MyCharge>& charges_vector, State& state){
     float radius = 0.05;
     float w = -0.002/radius;
     for (int n=0; n<N; n+=1){
-        charges_vector.emplace_back(Vec3{0.,0.,0.}, Vec3{0.,0.,0.}, 0.02,1.,-1.,Vec3{1.,0.,0.},2,Vec4{0.,0.,0.,0.},Vec4{0.,0.,-1.,0.},Vec4{w,2*PI*n/N,radius,0.});
-        charges_vector.emplace_back(Vec3{0.,0.,0.}, Vec3{0.,0.,0.}, 0.02,-1.,-1.,Vec3{0.,0.,1.},2,Vec4{0.,0.,0.,0.},Vec4{0.,0.,-1.,0.},Vec4{-w,2*PI*n/N,radius,0.});
+        charges_vector.emplace_back(Vec3{0.,0.,0.}, Vec3{0.,0.,0.}, 0.02,1.,-1.,Vec3{1.,0.,0.},2,Vec4{0.,0.,0.,0.},Vec4{radius,0.,0.,w},Vec4{0.,radius,0.,2*PI*n/N});
+        charges_vector.emplace_back(Vec3{0.,0.,0.}, Vec3{0.,0.,0.}, 0.02,-1.,-1.,Vec3{0.,0.,1.},2,Vec4{0.,0.,0.,0.},Vec4{radius,0.,0.,-w},Vec4{0.,radius,0.,2*PI*n/N});
     }
 
     //charges_vector.emplace_back(Vec3{0.,0.,0.}, Vec3{0.,0.,0.}, 0.02,1.,1.,Vec3{1.,0.,0.},2,Vec4{0.,0.,0.,0.},Vec4{0.,0.,-1.,0.},Vec4{w,0.,radius,0.});
@@ -327,4 +327,40 @@ void defineStage9(std::vector<MyCharge>& charges_vector, State& state){
     state.const_log_factor_common=-3.;
     std::cout<<state.const_log_factor_E<<" "<<state.const_log_factor_B<<" "<<state.const_log_factor_P<<std::endl;
     addAntenna(charges_vector,  1, {0.,0.,0.}, {2.,0.,0.},lambda,2.*A,state.c,.0000000005,0.02,true);
+}
+
+
+void defineStage10(std::vector<MyCharge>& charges_vector, State& state){
+    
+    state.grid_size_x = 30;
+    state.grid_size_y = 30;
+    state.grid_size_z = 30;
+    state.c = 0.01;
+    state.k = 0.0002;
+
+    state.log_factor_E=0.24;
+    state.log_factor_B=0.524;
+    state.log_factor_P=-0.2;
+    state.log_factor_common=-0.387;
+    state.arrow_size=0.067;
+    state.transparency_rendering_style=1;
+    state.arrow_transparency_factor=1.;
+    state.show_E=true;
+    state.show_B=false;
+    state.show_P=false;
+
+    state.const_log_factor_E=1.84f;
+    state.const_log_factor_B=-0.16f;
+    state.const_log_factor_P=4.06f;
+    state.const_log_factor_common=0.;
+
+    //addAntenna(charges_vector,  1, {0.,0.,0.}, {2.,0.,0.},lambda,2.*A,state.c,.0000000005,0.02,true);
+    int n = 5;
+    float R = 0.04f;
+    for(int i=0; i<n; i++){
+        charges_vector.emplace_back(Vec3{cos(i*2.f*PI/n)*2*R,sin(i*2.f*PI/n)*2*R,0.f},Vec3{cos(i*2.f*PI/n),sin(i*2.f*PI/n),0.f}*(-0.001),0.02f,.2f,300.f,Vec3{1.f,0.f,0.f});
+    }
+    //for(int i=0; i<n; i++){
+    //    charges_vector.emplace_back(Vec3{cos(i*2.f*PI/n)*R,sin(i*2.f*PI/n)*R,0.f},Vec3{0.f,0.f,0.f},0.02f,-0.05f,30000.f,Vec3{0.f,0.f,1.f});
+    //}
 }

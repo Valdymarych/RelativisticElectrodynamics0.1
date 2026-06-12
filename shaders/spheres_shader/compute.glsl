@@ -31,64 +31,87 @@ void main() {
 
     SphereState sphere_next;
 
-    if (staticData.moving_mode == 0){
-        Field f = get_field(sphere_now.pos.xyz,chargeId);
-        
-        vec3 v = sphere_now.vel.xyz;
-        float gamma = inversesqrt(1.0 - dot(v,v) / (uf.c*uf.c));
-        float m = sphere_now.acc.w;
-        float q = sphere_now.vel.w;
-        vec3 p = gamma * m * v;
+// needed for free charges;
 
-        vec3 total_field  = f.e + cross(v,f.b);
-        vec3 force = q * total_field;
-                   -  2.*pow(q,4)*gamma/(3*pow(uf.c,5)*pow(m,3))  * v * (dot(total_field,total_field)-pow(dot(v,f.e)/uf.c,2)); 
+    Field f;
+    vec3 v;
+    float gamma;
+    float gamma2;
+    float v_dot_E;
+
+    vec3 f_0;
+    vec3 f_2;
+    vec3 f_3;
+    vec3 force;
+
+    vec3 p;
+    float p2;
+    vec3 new_v;
+    
+// needed for elsewhere
+    float phase;
+    float angular_frequency;
+    vec3 basis1;
+    vec3 basis2;
+
+    if (staticData.moving_mode == 0){
+        f = get_field(sphere_now.pos.xyz,chargeId);
+        
+        v = sphere_now.vel.xyz;
+        gamma = inversesqrt(1.0 - dot(v,v) / (uf.c*uf.c));
+        gamma2 = gamma*gamma;
+        v_dot_E = dot(v,f.e);
+
+        f_0 = f.e+cross(v,f.b);  // lorenz without e
+        //f_1 =  !TO HARD!
+        f_2 = uf.k_c_4*staticData.param1.y*(cross(f.e,f.b)+f.b*dot(f.b,v)-v*dot(f.b,f.b)+uf._c_2*f.e*v_dot_E);
+        f_3 = -uf.k_c_5*staticData.param1.y*gamma2*v*(dot(f_0,f_0)-uf._c_2*v_dot_E*v_dot_E);
+        force = f_0*staticData.q+f_2+f_3;
+
+
+        p = gamma * staticData.m * v;
         p = p + force; // dt = 1;
-        float p2 = dot(p, p);
-        vec3 new_v = p*uf.c*inversesqrt(m*m*uf.c*uf.c+p2);
+        p2 = dot(p, p);
+        new_v = p*uf.c*inversesqrt(staticData.m*staticData.m*uf.c*uf.c+p2);
         
         sphere_next = SphereState(
             vec4(sphere_now.pos.xyz+new_v, sphere_now.pos.w+1),  //dt=1;
-            vec4(new_v, q),
-            vec4(new_v-v,m)                  //dt=1;
+            vec4(new_v, staticData.q),
+            vec4(new_v-v,staticData.m)                  //dt=1;
         );
-    } else {
-        if (staticData.moving_mode == 1){
-            float phase = staticData.param3.x*uf.time+staticData.param3.y;
-            sphere_next
-            = SphereState(
-                vec4(staticData.param1.xyz + staticData.param2.xyz * sin(phase), uf.time),
-                vec4(staticData.param2.xyz*staticData.param3.x*cos(phase),sphere_now.vel.w),
-                vec4(-staticData.param2.xyz*staticData.param3.x*staticData.param3.x*sin(phase),sphere_now.acc.w)
-            );
-
-        }
-        if (staticData.moving_mode == 2){
-            vec3 param2 = staticData.param2.xyz;
-            vec3 normal1 = vec3(1.,0.,0.);
-            if (1.-param2.x<0.1){
-                normal1 = vec3(0.,1.,0.);
-            }
-            vec3 basis1 = staticData.param3.z*cross(normal1,param2);
-            vec3 basis2 = cross(basis1, param2);
-            float w = staticData.param3.x;
-            float phase = w*uf.time+staticData.param3.y;
-            sphere_next
-            = SphereState(
-                vec4(staticData.param1.xyz + basis1 * sin(phase) + basis2 * cos(phase), uf.time),
-                vec4(w * basis1 * cos(phase) - w * basis2 * sin(phase),sphere_now.vel.w),
-                vec4(- w * w* basis1 * sin(phase) - w * w * basis2 * cos(phase),sphere_now.acc.w)
-            );
-        }
-        if (staticData.moving_mode == 3){
-            sphere_next
-            = SphereState(
-                vec4(staticData.param1.xyz + staticData.param2.xyz * uf.time, uf.time),
-                vec4(staticData.param2.xyz ,sphere_now.vel.w),
-                vec4(0.,0.,0.,sphere_now.acc.w)
-            );
-        }
     }
+    if (staticData.moving_mode == 1){    // simple occilation
+        angular_frequency = staticData.param3.x;
+        phase = staticData.param3.x*uf.time+staticData.param3.y;
+        sphere_next
+        = SphereState(
+            vec4(staticData.param1.xyz + staticData.param2.xyz * sin(phase), uf.time),
+            vec4(staticData.param2.xyz*angular_frequency*cos(phase),sphere_now.vel.w),
+            vec4(-staticData.param2.xyz*angular_frequency*angular_frequency*sin(phase),sphere_now.acc.w)
+        );
+
+    }
+    if (staticData.moving_mode == 2){    // circular occilation
+        angular_frequency=staticData.param2.w;
+        phase = angular_frequency*uf.time+staticData.param3.w;
+        basis1 = staticData.param2.xyz;
+        basis2 = staticData.param3.xyz;
+        sphere_next
+        = SphereState(
+            vec4(staticData.param1.xyz + basis1 * sin(phase) + basis2 * cos(phase), uf.time),
+            vec4(angular_frequency * basis1 * cos(phase) - angular_frequency * basis2 * sin(phase),sphere_now.vel.w),
+            vec4(- angular_frequency * angular_frequency* basis1 * sin(phase) - angular_frequency * angular_frequency * basis2 * cos(phase),sphere_now.acc.w)
+        );
+    }
+    if (staticData.moving_mode == 3){
+        sphere_next
+        = SphereState(
+            vec4(staticData.param1.xyz + staticData.param2.xyz * uf.time, uf.time),
+            vec4(staticData.param2.xyz ,sphere_now.vel.w),
+            vec4(0.,0.,0.,sphere_now.acc.w)
+        );
+    }
+
     presentSphericalData[chargeId] = sphere_next;
     spheres.history[uf.buffer_offset%uf.history_size*uf.amount_of_spheres+chargeId] = sphere_next;
 }

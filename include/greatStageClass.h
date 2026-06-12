@@ -192,6 +192,11 @@ void applyStateToUbo(State& state, UBOHandler& ubo){
     ubo.uniforms.time_per_frame = state.time_per_frame;
     ubo.uniforms.magnetic_permeability_inv = state.magnetic_permeability_inv;
     ubo.uniforms.history_size_log = state.history_size_log;
+
+    ubo.uniforms.k_c_3 = state.k/pow(state.c,3);  // k/c^3
+    ubo.uniforms.k_c_4 = state.k/pow(state.c,4);
+    ubo.uniforms.k_c_5 = state.k/pow(state.c,5);
+    ubo.uniforms._c_2 = 1/pow(state.c,2);  // 1/c^2
 }
 
 class Stage {

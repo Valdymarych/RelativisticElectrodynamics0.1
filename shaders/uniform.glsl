@@ -28,4 +28,9 @@ layout(std140, binding = 0) uniform Uniforms {
     float time_per_frame;
     float magnetic_permeability_inv;
     int history_size_log;
+
+    float k_c_3;  // k/c^3
+    float k_c_4;
+    float k_c_5;
+    float _c_2;  // 1/c^2
 } uf;

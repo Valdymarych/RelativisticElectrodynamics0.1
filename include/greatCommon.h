@@ -148,6 +148,11 @@ struct Uniforms {
     float time_per_frame;
     float magnetic_permeability_inv;
     int history_size_log;
+
+    float k_c_3;  // k/c^3
+    float k_c_4;
+    float k_c_5;
+    float _c_2;  // 1/c^2
 };
 
 struct StageDefiner;
@@ -209,6 +214,10 @@ struct State {
 };
 
 class MyCharge{
+    // pattern = 0   ->  free charge
+    // pattern = 1   ->  liniar occilation  {position_0, 0.},   {amplitude, 0.},  {circular_frequency (omega), phase_shift, 0., 0.}
+    // pattern = 2   ->  circular motion    {position_0, 0.},   {basis_vector, circular_frequency},  {second_basis_vector, phase_shift}
+    // pattern = 3   ->  liniar motion      {position_0, 0.},   {velocity_0,0.},  {0.,0.,0.,0.}
     private :
 
     public :
@@ -236,7 +245,11 @@ class MyCharge{
             param2(param2),
             param3(param3)
         {
-
+            float c_1 = 2/3*q*q*q/m;  // needed for precalculating results
+            float c_2 = 2/3*q*q*q*q/m/m;
+            if (pattern==0){
+                param1={c_1,c_2,0.,0.};
+            }
         }
         ~MyCharge(){
 

@@ -32,7 +32,8 @@ int main() {
         //{defineStage6, "circular polarization"},
         {defineStage7, "electron-positron"},
         {defineStage8, "atom"},
-        {defineStage9, "dipole"}
+        {defineStage9, "dipole"},
+        {defineStage10, "charges star"}
     };
     std::unique_ptr<Stage> stage = createStage(state.stages[state.currect_stage].defineStage);
     stage->activate(window,state);
