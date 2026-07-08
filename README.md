@@ -106,19 +106,19 @@ The Control Panel allows you to adjust camera positioning, zoom levels, and the 
 <details>
     <summary><b>Methodology and implementation:</b></summary>
     <h3>Retarded Potentials</h3>
-    <p>The field calculations are based on the retarded potentials method (Liénard–Wiechert potentials). This approach requires knowing the charge's position at a specific moment in the past and solving the light cone equation to find the "retarded time" — the exact moment from which information reached the observation point.
+    <p>The field calculations are based on the retarded potentials method (Liénard–Wiechert potentials). This approach requires knowing the charge's position at a specific moment in the past and solving the light cone equation to find the "retarded time", the exact moment from which information reached the observation point.
 To achieve this, I implement an SSBO (Shader Storage Buffer Object) that stores the "history" of the system, including the position, velocity, and acceleration of each charge for the last 512 frames (this buffer size is adjustable per scene).</p>
     <h3>Retarded Time Calculation</h3>
-    <p>Using this stored history, the software solves the light cone equation for each charge via binary search. For the binary search to f function correctly, the charge's velocity must not exceed the speed of light. This constraint guarantees a unique solution for the charge's "existence" on the light cone.
+    <p>Using this stored history, the software solves the light cone equation for each charge via binary search. For the binary search to function correctly, the charge's velocity must not exceed the speed of light. This constraint guarantees a unique solution for the charge's "existence" on the light cone.
     <h3>Field and Energy Computation</h3>
-    <p>Once the retarded time is found, the electric field is calculated using the general formula for a moving point charge. The magnetic field and the Poynting vector are then derived from these values. All these computations are performed within a compute shader, and the results are compactly stored in another SSBO.</p>
+    <p>Once the retarded time is found, the electric field is calculated using the general formula for a moving point charge (Which can be easily derived using Liénard–Wiechert potentials). The magnetic field and the Poynting vector are then derived from these values. All these computations are performed within a compute shader, and the results are compactly stored in another SSBO.</p>
     <h3>Rendering and Instancing</h3>
     <p>The visualization of "arrows" (vector fields) is handled through GPU Instancing. Each arrow consists of two triangles. Using matrix transformations, the orientation of each coordinate is manipulated so that the face of the triangle remains maximally visible from the camera's perspective (billboarding).</p>
     <h3>Physics and Dynamics</h3>
     <p>The coordinates of the charges are updated in two ways:
         <br>1. Predefined Trajectories: Such as circular motion or linear oscillation.
         <br>2. Dynamic Interaction: Calculating the net force acting on a charge from the surrounding field.
-In the dynamic case, the simulation accounts for radiation reaction (self-force) and energy loss due to acceleration. Since an exact analytical solution is computationally prohibitive, I utilize an approximation method that focuses on the primary self-force components.
+In the dynamic case, the simulation accounts for radiation reaction (self-force) and energy loss due to acceleration. Since an exact analytical solution is computationally hard, I utilize an approximation method that focuses on the primary self-force components.
     </p>
     <h3>Relativity</h3>
     <p>
